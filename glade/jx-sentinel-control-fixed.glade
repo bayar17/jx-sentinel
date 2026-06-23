@@ -1,0 +1,521 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated/cleaned for JX Sentinel Control - GTK 3.24 / Glade 3.40 -->
+<interface>
+  <requires lib="gtk+" version="3.24"/>
+
+  <object class="GtkApplicationWindow" id="main_window">
+    <property name="can-focus">False</property>
+    <property name="title">JX Sentinel Control</property>
+    <property name="default-width">1280</property>
+    <property name="default-height">780</property>
+    <property name="window-position">center</property>
+
+    <child type="titlebar">
+      <object class="GtkHeaderBar" id="header_bar">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="show-close-button">True</property>
+        <property name="title">JX Sentinel Control</property>
+        <property name="subtitle">Security monitor workspace</property>
+
+        <child>
+          <object class="GtkButton" id="button_start">
+            <property name="label">Start</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">True</property>
+          </object>
+          <packing>
+            <property name="pack-type">start</property>
+          </packing>
+        </child>
+
+        <child>
+          <object class="GtkButton" id="button_stop">
+            <property name="label">Stop</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">True</property>
+          </object>
+          <packing>
+            <property name="pack-type">start</property>
+          </packing>
+        </child>
+
+        <child>
+          <object class="GtkButton" id="button_restart">
+            <property name="label">Restart</property>
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">True</property>
+          </object>
+          <packing>
+            <property name="pack-type">end</property>
+          </packing>
+        </child>
+
+        <child>
+          <object class="GtkLabel" id="header_status_label">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="label">● RUNNING</property>
+            <style>
+              <class name="status-running"/>
+            </style>
+          </object>
+          <packing>
+            <property name="pack-type">end</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+
+    <child>
+      <object class="GtkBox" id="root_box">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">6</property>
+
+        <child>
+          <object class="GtkPaned" id="main_horizontal_paned">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="position">260</property>
+
+            <child>
+              <object class="GtkFrame" id="objects_frame">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label-xalign">0</property>
+                <property name="shadow-type">in</property>
+                <child>
+                  <object class="GtkScrolledWindow" id="objects_scrolled">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="hscrollbar-policy">automatic</property>
+                    <property name="vscrollbar-policy">automatic</property>
+                    <child>
+                      <object class="GtkTreeView" id="object_tree">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="headers-visible">False</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection" id="object_tree_selection"/>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child type="label">
+                  <object class="GtkLabel" id="objects_frame_label">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label">Objects</property>
+                    <attributes>
+                      <attribute name="weight" value="bold"/>
+                    </attributes>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="resize">False</property>
+                <property name="shrink">False</property>
+              </packing>
+            </child>
+
+            <child>
+              <object class="GtkPaned" id="workspace_inspector_paned">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="position">760</property>
+
+                <child>
+                  <object class="GtkBox" id="workspace_box">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">6</property>
+
+                    <child>
+                      <object class="GtkStackSwitcher" id="main_stack_switcher">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="stack">main_stack</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                      </packing>
+                    </child>
+
+                    <child>
+                      <object class="GtkStack" id="main_stack">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="transition-type">slide-left-right</property>
+
+                        <child>
+                          <object class="GtkBox" id="dashboard_page">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">12</property>
+                            <property name="margin">12</property>
+
+                            <child>
+                              <object class="GtkGrid" id="dashboard_cards_grid">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="column-spacing">12</property>
+                                <property name="row-spacing">12</property>
+
+                                <child>
+                                  <object class="GtkFrame" id="service_card">
+                                    <property name="visible">True</property>
+                                    <property name="shadow-type">in</property>
+                                    <child>
+                                      <object class="GtkBox" id="service_card_box">
+                                        <property name="visible">True</property>
+                                        <property name="orientation">vertical</property>
+                                        <property name="margin">12</property>
+                                        <child>
+                                          <object class="GtkLabel" id="service_card_title">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="label">Service</property>
+                                            <attributes><attribute name="weight" value="bold"/></attributes>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="service_card_value">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="label">Running</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                  <packing>
+                                    <property name="left-attach">0</property>
+                                    <property name="top-attach">0</property>
+                                  </packing>
+                                </child>
+
+                                <child>
+                                  <object class="GtkFrame" id="events_today_card">
+                                    <property name="visible">True</property>
+                                    <property name="shadow-type">in</property>
+                                    <child>
+                                      <object class="GtkBox" id="events_today_card_box">
+                                        <property name="visible">True</property>
+                                        <property name="orientation">vertical</property>
+                                        <property name="margin">12</property>
+                                        <child>
+                                          <object class="GtkLabel" id="events_today_card_title">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="label">Events Today</property>
+                                            <attributes><attribute name="weight" value="bold"/></attributes>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="events_today_card_value">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="label">0</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                  <packing>
+                                    <property name="left-attach">1</property>
+                                    <property name="top-attach">0</property>
+                                  </packing>
+                                </child>
+
+                                <child>
+                                  <object class="GtkFrame" id="severity_card">
+                                    <property name="visible">True</property>
+                                    <property name="shadow-type">in</property>
+                                    <child>
+                                      <object class="GtkBox" id="severity_card_box">
+                                        <property name="visible">True</property>
+                                        <property name="orientation">vertical</property>
+                                        <property name="margin">12</property>
+                                        <child>
+                                          <object class="GtkLabel" id="severity_card_title">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="label">High Severity</property>
+                                            <attributes><attribute name="weight" value="bold"/></attributes>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="severity_card_value">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="label">0</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                  <packing>
+                                    <property name="left-attach">2</property>
+                                    <property name="top-attach">0</property>
+                                  </packing>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                              </packing>
+                            </child>
+
+                            <child>
+                              <object class="GtkFrame" id="live_events_frame">
+                                <property name="visible">True</property>
+                                <property name="label-xalign">0</property>
+                                <property name="shadow-type">in</property>
+                                <child>
+                                  <object class="GtkScrolledWindow" id="events_scrolled">
+                                    <property name="visible">True</property>
+                                    <property name="can-focus">True</property>
+                                    <child>
+                                      <object class="GtkTreeView" id="events_tree">
+                                        <property name="visible">True</property>
+                                        <property name="can-focus">True</property>
+                                        <child internal-child="selection">
+                                          <object class="GtkTreeSelection" id="events_tree_selection"/>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child type="label">
+                                  <object class="GtkLabel" id="live_events_frame_label">
+                                    <property name="visible">True</property>
+                                    <property name="label">Live Events</property>
+                                    <attributes><attribute name="weight" value="bold"/></attributes>
+                                  </object>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">True</property>
+                                <property name="fill">True</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="name">dashboard</property>
+                            <property name="title">Dashboard</property>
+                          </packing>
+                        </child>
+
+                        <child>
+                          <object class="GtkBox" id="rules_page">
+                            <property name="visible">True</property>
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">6</property>
+                            <property name="margin">12</property>
+                            <child>
+                              <object class="GtkToolbar" id="rules_toolbar">
+                                <property name="visible">True</property>
+                                <child>
+                                  <object class="GtkToolButton" id="button_add_rule">
+                                    <property name="visible">True</property>
+                                    <property name="label">Add Rule</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkToolButton" id="button_remove_rule">
+                                    <property name="visible">True</property>
+                                    <property name="label">Remove</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkScrolledWindow" id="rules_scrolled">
+                                <property name="visible">True</property>
+                                <child>
+                                  <object class="GtkTreeView" id="rules_tree">
+                                    <property name="visible">True</property>
+                                    <child internal-child="selection">
+                                      <object class="GtkTreeSelection" id="rules_tree_selection"/>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">True</property>
+                                <property name="fill">True</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="name">rules</property>
+                            <property name="title">Rules</property>
+                          </packing>
+                        </child>
+
+                        <child>
+                          <object class="GtkBox" id="diagnostics_page">
+                            <property name="visible">True</property>
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">6</property>
+                            <property name="margin">12</property>
+                            <child>
+                              <object class="GtkButton" id="button_run_diagnostics">
+                                <property name="label">Run Diagnostics</property>
+                                <property name="visible">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkScrolledWindow" id="diagnostics_scrolled">
+                                <property name="visible">True</property>
+                                <child>
+                                  <object class="GtkTreeView" id="diagnostics_tree">
+                                    <property name="visible">True</property>
+                                    <child internal-child="selection">
+                                      <object class="GtkTreeSelection" id="diagnostics_tree_selection"/>
+                                    </child>
+                                  </object>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">True</property>
+                                <property name="fill">True</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="name">diagnostics</property>
+                            <property name="title">Diagnostics</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="expand">True</property>
+                        <property name="fill">True</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="resize">True</property>
+                    <property name="shrink">False</property>
+                  </packing>
+                </child>
+
+                <child>
+                  <object class="GtkFrame" id="inspector_frame">
+                    <property name="visible">True</property>
+                    <property name="label-xalign">0</property>
+                    <property name="shadow-type">in</property>
+                    <child>
+                      <object class="GtkBox" id="inspector_box">
+                        <property name="visible">True</property>
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">8</property>
+                        <property name="margin">12</property>
+                        <child>
+                          <object class="GtkLabel" id="inspector_title">
+                            <property name="visible">True</property>
+                            <property name="xalign">0</property>
+                            <property name="label">No object selected</property>
+                            <attributes><attribute name="weight" value="bold"/></attributes>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="inspector_details">
+                            <property name="visible">True</property>
+                            <property name="xalign">0</property>
+                            <property name="yalign">0</property>
+                            <property name="wrap">True</property>
+                            <property name="label">Select a service, watch root, rule, process, or event to inspect it.</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="button_inspector_open">
+                            <property name="label">Open</property>
+                            <property name="visible">True</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="button_inspector_remove">
+                            <property name="label">Remove</property>
+                            <property name="visible">True</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child type="label">
+                      <object class="GtkLabel" id="inspector_frame_label">
+                        <property name="visible">True</property>
+                        <property name="label">Inspector</property>
+                        <attributes><attribute name="weight" value="bold"/></attributes>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="resize">False</property>
+                    <property name="shrink">False</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="resize">True</property>
+                <property name="shrink">False</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+
+        <child>
+          <object class="GtkFrame" id="journal_frame">
+            <property name="visible">True</property>
+            <property name="label-xalign">0</property>
+            <property name="shadow-type">in</property>
+            <child>
+              <object class="GtkScrolledWindow" id="journal_scrolled">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="min-content-height">130</property>
+                <child>
+                  <object class="GtkTextView" id="journal_textview">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="editable">False</property>
+                    <property name="monospace">True</property>
+                    <property name="wrap-mode">none</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child type="label">
+              <object class="GtkLabel" id="journal_frame_label">
+                <property name="visible">True</property>
+                <property name="label">Journal Console</property>
+                <attributes><attribute name="weight" value="bold"/></attributes>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

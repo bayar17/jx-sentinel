@@ -1,0 +1,34 @@
+[Unit]
+Description=JX Sentinel Guard Permission Enforcer
+After=local-fs.target
+Wants=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/opt/jx/sbin/jx-sentinel-guard --config /opt/jx/etc/jx-sentinel/guard.conf
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=45
+
+User=root
+Group=root
+
+RuntimeDirectory=jx-sentinel
+RuntimeDirectoryMode=0755
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/jx /home/jackson /run/jx-sentinel
+
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_SYS_ADMIN CAP_DAC_READ_SEARCH
+
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

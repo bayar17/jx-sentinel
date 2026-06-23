@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+JX_ROOT="/opt/jx"
+BACKUP_DIR="${JX_ROOT}/var/backups/jx-branding"
+PLYMOUTH_DEFAULT_BACKUP="${BACKUP_DIR}/plymouth-default-theme.orig"
+GDM_DEFAULT_BACKUP="${BACKUP_DIR}/gdm-theme-gresource.orig"
+GDM_DCONF_FILE="/usr/share/gdm/dconf/91-jx-branding"
+
+OS_RELEASE="/usr/lib/os-release"
+ETC_OS_RELEASE="/etc/os-release"
+ETC_OS_RELEASE_TARGET="../usr/lib/os-release"
+
+HICOLOR_DIR="/usr/share/icons/hicolor"
+YARU_DIR="/usr/share/icons/Yaru"
+
+YARU_LOGOS=(
+    "/usr/share/icons/Yaru/scalable/apps/ubuntu-logo-icon.svg"
+    "/usr/share/icons/Yaru/scalable/places/distributor-logo.svg"
+    "/usr/share/icons/Yaru/scalable/apps/distributor-logo.svg"
+)
+
+HICOLOR_LOGOS=(
+    "/usr/share/icons/hicolor/scalable/apps/jx-logo.svg"
+    "/usr/share/icons/hicolor/scalable/apps/distributor-logo.svg"
+    "/usr/share/icons/hicolor/scalable/apps/ubuntu-logo-icon.svg"
+    "/usr/share/icons/hicolor/256x256/apps/jx-logo.png"
+    "/usr/share/icons/hicolor/256x256/apps/distributor-logo.png"
+    "/usr/share/icons/hicolor/256x256/apps/ubuntu-logo-icon.png"
+)
+
+GNOME_ABOUT_PIXMAPS=(
+    "/usr/share/pixmaps/ubuntu-logo-text-dark.png"
+    "/usr/share/pixmaps/ubuntu-logo-text.png"
+)
+
+log() {
+    printf 'jx-restore-ubuntu-branding: %s\n' "$*"
+}
+
+die() {
+    printf 'jx-restore-ubuntu-branding: ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+require_root() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        die "this script must be run as root"
+    fi
+}
+
+backup_name_for() {
+    local path="$1"
+    path="${path#/}"
+    path="${path//\//__}"
+    printf '%s' "${path}"
+}
+
+restore_path_if_present() {
+    local path="$1"
+    local label source
+    label="$(backup_name_for "${path}")"
+    source="${BACKUP_DIR}/${label}.orig"
+
+    if [[ ! -e "${source}" && ! -L "${source}" ]]; then
+        log "no backup found for ${path}, skipping"
+        return 0
+    fi
+
+    log "restoring ${path} from ${source}"
+    install -d -m 0755 "$(dirname "${path}")"
+    rm -f -- "${path}"
+    cp -a --no-dereference "${source}" "${path}"
+}
+
+restore_os_release() {
+    restore_path_if_present "${OS_RELEASE}"
+
+    local etc_label etc_backup
+    etc_label="$(backup_name_for "${ETC_OS_RELEASE}")"
+    etc_backup="${BACKUP_DIR}/${etc_label}.orig"
+
+    if [[ -e "${etc_backup}" || -L "${etc_backup}" ]]; then
+        restore_path_if_present "${ETC_OS_RELEASE}"
+    else
+        log "restoring ${ETC_OS_RELEASE} symlink -> ${ETC_OS_RELEASE_TARGET}"
+        rm -f -- "${ETC_OS_RELEASE}"
+        ln -s "${ETC_OS_RELEASE_TARGET}" "${ETC_OS_RELEASE}"
+    fi
+}
+
+restore_yaru_logos() {
+    local path
+    for path in "${YARU_LOGOS[@]}"; do
+        restore_path_if_present "${path}"
+    done
+}
+
+restore_hicolor_logos() {
+    local path
+    for path in "${HICOLOR_LOGOS[@]}"; do
+        restore_path_if_present "${path}"
+    done
+}
+
+restore_gnome_about_pixmaps() {
+    local path
+    for path in "${GNOME_ABOUT_PIXMAPS[@]}"; do
+        restore_path_if_present "${path}"
+    done
+}
+
+refresh_icon_cache() {
+    if ! command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        log "gtk-update-icon-cache not found, skipping icon cache refresh"
+        return 0
+    fi
+
+    log "refreshing hicolor icon cache"
+    gtk-update-icon-cache -f "${HICOLOR_DIR}" || log "hicolor icon cache refresh failed"
+
+    if [[ -d "${YARU_DIR}" ]]; then
+        log "refreshing Yaru icon cache"
+        gtk-update-icon-cache -f "${YARU_DIR}" || log "Yaru icon cache refresh failed"
+    else
+        log "Yaru icon theme not present, skipping cache refresh"
+    fi
+}
+
+restore_plymouth_theme() {
+    local theme theme_name theme_path
+    if [[ ! -s "${PLYMOUTH_DEFAULT_BACKUP}" ]]; then
+        log "no Plymouth default theme backup found, skipping"
+        return 0
+    fi
+
+    theme="$(head -n 1 "${PLYMOUTH_DEFAULT_BACKUP}")"
+    if [[ -z "${theme}" ]]; then
+        log "empty Plymouth default theme backup, skipping"
+        return 0
+    fi
+    theme_name="${theme}"
+    theme_path="${theme}"
+    if [[ "${theme}" == /*.plymouth ]]; then
+        theme_name="$(basename "${theme}" .plymouth)"
+    else
+        theme_path="/usr/share/plymouth/themes/${theme}/${theme}.plymouth"
+    fi
+
+    log "restoring Plymouth default theme to ${theme}"
+    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+        plymouth-set-default-theme "${theme_name}" || log "could not restore Plymouth theme with plymouth-set-default-theme"
+    elif command -v update-alternatives >/dev/null 2>&1 && [[ -f "${theme_path}" ]]; then
+        update-alternatives --set default.plymouth "${theme_path}" || log "could not restore Plymouth default alternative"
+    fi
+}
+
+restore_gdm_theme() {
+    local resource
+    if [[ ! -s "${GDM_DEFAULT_BACKUP}" ]]; then
+        log "no GDM theme backup found, skipping"
+        return 0
+    fi
+
+    resource="$(head -n 1 "${GDM_DEFAULT_BACKUP}")"
+    if [[ -z "${resource}" || ! -f "${resource}" ]]; then
+        log "saved GDM theme resource is missing, skipping: ${resource}"
+        return 0
+    fi
+
+    log "restoring GDM theme resource to ${resource}"
+    if command -v update-alternatives >/dev/null 2>&1; then
+        update-alternatives --set gdm-theme.gresource "${resource}" || log "could not restore GDM theme resource"
+    fi
+}
+
+restore_gdm_logo_setting() {
+    if [[ -e "${BACKUP_DIR}/usr__share__gdm__dconf__91-jx-branding.orig" ||
+          -L "${BACKUP_DIR}/usr__share__gdm__dconf__91-jx-branding.orig" ]]; then
+        restore_path_if_present "${GDM_DCONF_FILE}"
+    elif [[ -f "${GDM_DCONF_FILE}" ]] && grep -q "jx-logo-text-version-64.png" "${GDM_DCONF_FILE}"; then
+        log "removing generated GDM logo setting ${GDM_DCONF_FILE}"
+        rm -f -- "${GDM_DCONF_FILE}"
+    else
+        log "no generated GDM logo setting found, skipping"
+    fi
+
+    if [[ -x /usr/share/gdm/generate-config ]]; then
+        log "refreshing GDM greeter dconf"
+        /usr/share/gdm/generate-config
+    elif command -v dconf >/dev/null 2>&1; then
+        log "refreshing dconf databases"
+        dconf update
+    fi
+}
+
+refresh_initramfs() {
+    if command -v update-initramfs >/dev/null 2>&1; then
+        log "refreshing initramfs for Plymouth"
+        update-initramfs -u
+    else
+        log "update-initramfs not found, skipping Plymouth initramfs refresh"
+    fi
+}
+
+main() {
+    require_root
+    if [[ ! -d "${BACKUP_DIR}" ]]; then
+        die "backup directory not found: ${BACKUP_DIR}"
+    fi
+    restore_os_release
+    restore_hicolor_logos
+    restore_yaru_logos
+    restore_gnome_about_pixmaps
+    restore_plymouth_theme
+    restore_gdm_theme
+    restore_gdm_logo_setting
+    refresh_icon_cache
+    refresh_initramfs
+    log "Ubuntu branding restore complete. Log out and back in if GNOME Settings still shows stale branding."
+}
+
+main "$@"

@@ -1,0 +1,537 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+JX_NAME="JX Workstation"
+JX_PRETTY_NAME="JX Workstation 24.04 LTS"
+JX_VERSION_ID="24.04"
+JX_VERSION="24.04 LTS"
+JX_CODENAME="noble"
+
+JX_ROOT="/opt/jx"
+JX_LOGO_SVG="${JX_ROOT}/share/icons/jx-logo.svg"
+JX_LOGO_PNG="${JX_ROOT}/share/icons/jx-logo.png"
+JX_ABOUT_LOGO_PNG="${JX_ROOT}/share/icons/jx-about-logo.png"
+JX_PLYMOUTH_LOGO_PNG="${JX_ROOT}/share/icons/jx-plymouth-logo.png"
+JX_GDM_LOGO_PNG="${JX_ROOT}/share/icons/jx-gdm-logo.png"
+BACKUP_DIR="${JX_ROOT}/var/backups/jx-branding"
+
+OS_RELEASE="/usr/lib/os-release"
+ETC_OS_RELEASE="/etc/os-release"
+ETC_OS_RELEASE_TARGET="../usr/lib/os-release"
+
+HICOLOR_DIR="/usr/share/icons/hicolor"
+YARU_DIR="/usr/share/icons/Yaru"
+
+YARU_LOGOS=(
+    "/usr/share/icons/Yaru/scalable/apps/ubuntu-logo-icon.svg"
+    "/usr/share/icons/Yaru/scalable/places/distributor-logo.svg"
+    "/usr/share/icons/Yaru/scalable/apps/distributor-logo.svg"
+)
+
+HICOLOR_SVG_LOGOS=(
+    "/usr/share/icons/hicolor/scalable/apps/jx-logo.svg"
+    "/usr/share/icons/hicolor/scalable/apps/distributor-logo.svg"
+    "/usr/share/icons/hicolor/scalable/apps/ubuntu-logo-icon.svg"
+)
+
+HICOLOR_PNG_LOGOS=(
+    "/usr/share/icons/hicolor/256x256/apps/jx-logo.png"
+    "/usr/share/icons/hicolor/256x256/apps/distributor-logo.png"
+    "/usr/share/icons/hicolor/256x256/apps/ubuntu-logo-icon.png"
+)
+
+GNOME_ABOUT_PIXMAPS=(
+    "/usr/share/pixmaps/ubuntu-logo-text-dark.png"
+    "/usr/share/pixmaps/ubuntu-logo-text.png"
+)
+
+ABOUT_LOGO_WIDTH=260
+ABOUT_LOGO_HEIGHT=91
+PLYMOUTH_LOGO_WIDTH=248
+PLYMOUTH_LOGO_HEIGHT=87
+GDM_LOGO_WIDTH=260
+GDM_LOGO_HEIGHT=91
+
+PLYMOUTH_SOURCE_THEME_DIR="/usr/share/plymouth/themes/spinner"
+PLYMOUTH_THEME_NAME="jx-workstation"
+PLYMOUTH_THEME_DIR="/usr/share/plymouth/themes/${PLYMOUTH_THEME_NAME}"
+PLYMOUTH_THEME_FILE="${PLYMOUTH_THEME_DIR}/${PLYMOUTH_THEME_NAME}.plymouth"
+PLYMOUTH_DEFAULT_BACKUP="${BACKUP_DIR}/plymouth-default-theme.orig"
+GDM_THEME_NAME="jx-workstation"
+GDM_THEME_DIR="/usr/share/gnome-shell/theme/${GDM_THEME_NAME}"
+GDM_THEME_RESOURCE="${GDM_THEME_DIR}/gnome-shell-theme.gresource"
+GDM_DEFAULT_BACKUP="${BACKUP_DIR}/gdm-theme-gresource.orig"
+GDM_LOGO_DEST="/usr/share/images/vendor-logos/jx-logo-text-version-64.png"
+GDM_DCONF_FILE="/usr/share/gdm/dconf/91-jx-branding"
+
+log() {
+    printf 'jx-apply-branding: %s\n' "$*"
+}
+
+die() {
+    printf 'jx-apply-branding: ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+require_root() {
+    if [[ "${EUID}" -ne 0 ]]; then
+        die "this script must be run as root"
+    fi
+}
+
+require_logo() {
+    if [[ ! -f "${JX_LOGO_PNG}" ]]; then
+        die "required PNG logo not found: ${JX_LOGO_PNG}"
+    fi
+}
+
+ensure_svg_logo() {
+    if [[ -f "${JX_LOGO_SVG}" ]]; then
+        return 0
+    fi
+
+    if ! command -v base64 >/dev/null 2>&1; then
+        die "base64 is required to generate ${JX_LOGO_SVG} from ${JX_LOGO_PNG}"
+    fi
+
+    log "generating ${JX_LOGO_SVG} wrapper from ${JX_LOGO_PNG}"
+    install -d -m 0755 "$(dirname "${JX_LOGO_SVG}")"
+    local encoded tmp
+    encoded="$(base64 -w 0 "${JX_LOGO_PNG}")"
+    tmp="$(mktemp "${JX_LOGO_SVG}.tmp.XXXXXX")"
+    cat > "${tmp}" <<EOF_SVG
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="718" height="461" viewBox="0 0 718 461">
+  <image width="718" height="461" href="data:image/png;base64,${encoded}"/>
+</svg>
+EOF_SVG
+    install -m 0644 "${tmp}" "${JX_LOGO_SVG}"
+    rm -f -- "${tmp}"
+}
+
+convert_cmd() {
+    if command -v magick >/dev/null 2>&1; then
+        printf '%s' "magick"
+    elif command -v convert >/dev/null 2>&1; then
+        printf '%s' "convert"
+    else
+        return 1
+    fi
+}
+
+ensure_about_logo() {
+    local converter tmp
+    converter="$(convert_cmd)" || die "ImageMagick is required to generate resized GNOME About logo pixmaps"
+
+    log "generating ${JX_ABOUT_LOGO_PNG} at ${ABOUT_LOGO_WIDTH}x${ABOUT_LOGO_HEIGHT}"
+    install -d -m 0755 "$(dirname "${JX_ABOUT_LOGO_PNG}")"
+    tmp="$(mktemp --suffix=.png "${JX_ABOUT_LOGO_PNG}.tmp.XXXXXX")"
+    "${converter}" "${JX_LOGO_PNG}" \
+        -trim +repage \
+        -resize "${ABOUT_LOGO_WIDTH}x${ABOUT_LOGO_HEIGHT}" \
+        -background none -gravity center \
+        -extent "${ABOUT_LOGO_WIDTH}x${ABOUT_LOGO_HEIGHT}" \
+        -strip \
+        "PNG32:${tmp}"
+    install -m 0644 "${tmp}" "${JX_ABOUT_LOGO_PNG}"
+    rm -f -- "${tmp}"
+}
+
+ensure_plymouth_logo() {
+    local converter tmp
+    converter="$(convert_cmd)" || die "ImageMagick is required to generate resized Plymouth logo pixmaps"
+
+    log "generating ${JX_PLYMOUTH_LOGO_PNG} at ${PLYMOUTH_LOGO_WIDTH}x${PLYMOUTH_LOGO_HEIGHT}"
+    install -d -m 0755 "$(dirname "${JX_PLYMOUTH_LOGO_PNG}")"
+    tmp="$(mktemp --suffix=.png "${JX_PLYMOUTH_LOGO_PNG}.tmp.XXXXXX")"
+    "${converter}" "${JX_LOGO_PNG}" \
+        -trim +repage \
+        -resize "${PLYMOUTH_LOGO_WIDTH}x${PLYMOUTH_LOGO_HEIGHT}" \
+        -background none -gravity center \
+        -extent "${PLYMOUTH_LOGO_WIDTH}x${PLYMOUTH_LOGO_HEIGHT}" \
+        -strip \
+        "PNG32:${tmp}"
+    install -m 0644 "${tmp}" "${JX_PLYMOUTH_LOGO_PNG}"
+    rm -f -- "${tmp}"
+}
+
+ensure_gdm_logo() {
+    local converter tmp
+    converter="$(convert_cmd)" || die "ImageMagick is required to generate resized GDM logo pixmaps"
+
+    log "generating ${JX_GDM_LOGO_PNG} at ${GDM_LOGO_WIDTH}x${GDM_LOGO_HEIGHT}"
+    install -d -m 0755 "$(dirname "${JX_GDM_LOGO_PNG}")"
+    tmp="$(mktemp --suffix=.png "${JX_GDM_LOGO_PNG}.tmp.XXXXXX")"
+    "${converter}" "${JX_LOGO_PNG}" \
+        -trim +repage \
+        -resize "${GDM_LOGO_WIDTH}x${GDM_LOGO_HEIGHT}" \
+        -background none -gravity center \
+        -extent "${GDM_LOGO_WIDTH}x${GDM_LOGO_HEIGHT}" \
+        -strip \
+        "PNG32:${tmp}"
+    install -m 0644 "${tmp}" "${JX_GDM_LOGO_PNG}"
+    rm -f -- "${tmp}"
+}
+
+backup_name_for() {
+    local path="$1"
+    path="${path#/}"
+    path="${path//\//__}"
+    printf '%s' "${path}"
+}
+
+backup_path_once() {
+    local path="$1"
+    local label
+    label="$(backup_name_for "${path}")"
+
+    if [[ ! -e "${path}" && ! -L "${path}" ]]; then
+        return 0
+    fi
+
+    install -d -m 0755 "${BACKUP_DIR}"
+    if [[ ! -e "${BACKUP_DIR}/${label}.orig" && ! -L "${BACKUP_DIR}/${label}.orig" ]]; then
+        log "backing up ${path} -> ${BACKUP_DIR}/${label}.orig"
+        cp -a --no-dereference "${path}" "${BACKUP_DIR}/${label}.orig"
+    else
+        log "backup already exists for ${path}"
+    fi
+}
+
+backup_path_timestamped() {
+    local path="$1"
+    local label stamp
+    label="$(backup_name_for "${path}")"
+    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+
+    if [[ ! -e "${path}" && ! -L "${path}" ]]; then
+        return 0
+    fi
+
+    install -d -m 0755 "${BACKUP_DIR}"
+    cp -a --no-dereference "${path}" "${BACKUP_DIR}/${label}.${stamp}"
+}
+
+write_os_release() {
+    log "writing ${OS_RELEASE}"
+    backup_path_once "${OS_RELEASE}"
+    backup_path_timestamped "${OS_RELEASE}"
+
+    install -d -m 0755 "$(dirname "${OS_RELEASE}")"
+    cat > "${OS_RELEASE}" <<EOF_OS_RELEASE
+PRETTY_NAME="${JX_PRETTY_NAME}"
+NAME="${JX_NAME}"
+VERSION_ID="${JX_VERSION_ID}"
+VERSION="${JX_VERSION}"
+VERSION_CODENAME=${JX_CODENAME}
+ID=jx
+ID_LIKE=ubuntu
+HOME_URL="https://jx.local"
+SUPPORT_URL="https://jx.local/support"
+BUG_REPORT_URL="https://jx.local/bugs"
+PRIVACY_POLICY_URL="https://jx.local/privacy"
+UBUNTU_CODENAME=${JX_CODENAME}
+LOGO=jx-logo
+EOF_OS_RELEASE
+    chmod 0644 "${OS_RELEASE}"
+}
+
+recreate_etc_os_release_symlink() {
+    log "recreating ${ETC_OS_RELEASE} -> ${ETC_OS_RELEASE_TARGET}"
+    if [[ -e "${ETC_OS_RELEASE}" || -L "${ETC_OS_RELEASE}" ]]; then
+        if [[ ! -L "${ETC_OS_RELEASE}" ]]; then
+            backup_path_once "${ETC_OS_RELEASE}"
+            backup_path_timestamped "${ETC_OS_RELEASE}"
+        fi
+        rm -f -- "${ETC_OS_RELEASE}"
+    fi
+    ln -s "${ETC_OS_RELEASE_TARGET}" "${ETC_OS_RELEASE}"
+}
+
+install_hicolor_logos() {
+    local path
+    log "installing JX logo into hicolor icon theme"
+    install -d -m 0755 "${HICOLOR_DIR}/scalable/apps"
+    for path in "${HICOLOR_SVG_LOGOS[@]}"; do
+        backup_path_once "${path}"
+        backup_path_timestamped "${path}"
+        install -m 0644 "${JX_LOGO_SVG}" "${path}"
+    done
+
+    log "installing PNG logo into hicolor icon theme"
+    install -d -m 0755 "${HICOLOR_DIR}/256x256/apps"
+    for path in "${HICOLOR_PNG_LOGOS[@]}"; do
+        backup_path_once "${path}"
+        backup_path_timestamped "${path}"
+        install -m 0644 "${JX_LOGO_PNG}" "${path}"
+    done
+}
+
+override_yaru_logos() {
+    local path
+    for path in "${YARU_LOGOS[@]}"; do
+        if [[ -e "${path}" || -L "${path}" ]]; then
+            log "overriding Yaru logo ${path}"
+            backup_path_once "${path}"
+            backup_path_timestamped "${path}"
+            install -d -m 0755 "$(dirname "${path}")"
+            install -m 0644 "${JX_LOGO_SVG}" "${path}"
+        else
+            log "Yaru logo path not present, skipping: ${path}"
+        fi
+    done
+}
+
+override_gnome_about_pixmaps() {
+    local path
+    log "overriding GNOME Settings About header pixmaps"
+    for path in "${GNOME_ABOUT_PIXMAPS[@]}"; do
+        if [[ -e "${path}" || -L "${path}" ]]; then
+            backup_path_once "${path}"
+            backup_path_timestamped "${path}"
+        fi
+        install -d -m 0755 "$(dirname "${path}")"
+        install -m 0644 "${JX_ABOUT_LOGO_PNG}" "${path}"
+    done
+}
+
+backup_plymouth_default_once() {
+    if [[ -e "${PLYMOUTH_DEFAULT_BACKUP}" ]]; then
+        log "Plymouth default theme backup already exists"
+        return 0
+    fi
+
+    install -d -m 0755 "${BACKUP_DIR}"
+    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+        plymouth-set-default-theme > "${PLYMOUTH_DEFAULT_BACKUP}" 2>/dev/null || true
+    fi
+    if [[ ! -s "${PLYMOUTH_DEFAULT_BACKUP}" ]] && command -v update-alternatives >/dev/null 2>&1; then
+        update-alternatives --query default.plymouth 2>/dev/null |
+            awk -F': ' '$1 == "Value" {print $2; found=1} END {if (!found) exit 1}' \
+            > "${PLYMOUTH_DEFAULT_BACKUP}" || true
+    fi
+    if [[ ! -s "${PLYMOUTH_DEFAULT_BACKUP}" ]]; then
+        printf '%s\n' "bgrt" > "${PLYMOUTH_DEFAULT_BACKUP}"
+    fi
+    log "backed up Plymouth default theme as $(cat "${PLYMOUTH_DEFAULT_BACKUP}")"
+}
+
+install_plymouth_theme() {
+    local path rel
+    if [[ ! -d "${PLYMOUTH_SOURCE_THEME_DIR}" ]]; then
+        die "Plymouth spinner theme not found: ${PLYMOUTH_SOURCE_THEME_DIR}"
+    fi
+
+    backup_plymouth_default_once
+    log "installing Plymouth theme ${PLYMOUTH_THEME_NAME}"
+    install -d -m 0755 "${PLYMOUTH_THEME_DIR}"
+
+    while IFS= read -r -d '' path; do
+        rel="${path#${PLYMOUTH_SOURCE_THEME_DIR}/}"
+        install -m 0644 "${path}" "${PLYMOUTH_THEME_DIR}/${rel}"
+    done < <(find "${PLYMOUTH_SOURCE_THEME_DIR}" -maxdepth 1 -type f -print0)
+
+    install -m 0644 "${JX_PLYMOUTH_LOGO_PNG}" "${PLYMOUTH_THEME_DIR}/watermark.png"
+    install -m 0644 "${JX_PLYMOUTH_LOGO_PNG}" "${PLYMOUTH_THEME_DIR}/bgrt-fallback.png"
+
+    cat > "${PLYMOUTH_THEME_FILE}" <<EOF_PLYMOUTH
+[Plymouth Theme]
+Name=JX Workstation
+Description=JX Workstation boot splash
+ModuleName=two-step
+
+[two-step]
+Font=Cantarell 12
+TitleFont=Cantarell Light 30
+ImageDir=${PLYMOUTH_THEME_DIR}
+DialogHorizontalAlignment=.5
+DialogVerticalAlignment=.382
+TitleHorizontalAlignment=.5
+TitleVerticalAlignment=.382
+HorizontalAlignment=.5
+VerticalAlignment=.7
+WatermarkHorizontalAlignment=.5
+WatermarkVerticalAlignment=.96
+Transition=none
+TransitionDuration=0.0
+BackgroundStartColor=0x000000
+BackgroundEndColor=0x000000
+ProgressBarBackgroundColor=0x606060
+ProgressBarForegroundColor=0xffffff
+DialogClearsFirmwareBackground=true
+MessageBelowAnimation=true
+
+[boot-up]
+UseEndAnimation=false
+UseFirmwareBackground=false
+
+[shutdown]
+UseEndAnimation=false
+UseFirmwareBackground=false
+
+[reboot]
+UseEndAnimation=false
+UseFirmwareBackground=false
+
+[updates]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Installing Updates...
+SubTitle=Do not turn off your computer
+
+[system-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Upgrading System...
+SubTitle=Do not turn off your computer
+
+[firmware-upgrade]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Upgrading Firmware...
+SubTitle=Do not turn off your computer
+
+[system-reset]
+SuppressMessages=true
+ProgressBarShowPercentComplete=true
+UseProgressBar=true
+Title=Resetting System...
+SubTitle=Do not turn off your computer
+EOF_PLYMOUTH
+    chmod 0644 "${PLYMOUTH_THEME_FILE}"
+
+    if command -v update-alternatives >/dev/null 2>&1; then
+        update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth \
+            "${PLYMOUTH_THEME_FILE}" 120
+    fi
+
+    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+        plymouth-set-default-theme "${PLYMOUTH_THEME_NAME}"
+    elif command -v update-alternatives >/dev/null 2>&1; then
+        update-alternatives --set default.plymouth "${PLYMOUTH_THEME_FILE}"
+    fi
+}
+
+refresh_initramfs() {
+    if command -v update-initramfs >/dev/null 2>&1; then
+        log "refreshing initramfs for Plymouth"
+        update-initramfs -u
+    else
+        log "update-initramfs not found, skipping Plymouth initramfs refresh"
+    fi
+}
+
+restore_gdm_theme_resource_if_needed() {
+    local resource
+    if [[ ! -s "${GDM_DEFAULT_BACKUP}" ]]; then
+        return 0
+    fi
+
+    resource="$(head -n 1 "${GDM_DEFAULT_BACKUP}")"
+    if [[ -n "${resource}" && -f "${resource}" ]] && command -v update-alternatives >/dev/null 2>&1; then
+        log "using original GDM theme resource for login screen logo support"
+        update-alternatives --set gdm-theme.gresource "${resource}" || log "could not restore original GDM theme resource"
+    fi
+}
+
+refresh_gdm_dconf() {
+    if [[ -x /usr/share/gdm/generate-config ]]; then
+        log "refreshing GDM greeter dconf"
+        /usr/share/gdm/generate-config
+    elif command -v dconf >/dev/null 2>&1; then
+        log "refreshing dconf databases"
+        dconf update
+    else
+        log "dconf not found, skipping GDM dconf refresh"
+    fi
+}
+
+install_gdm_logo_setting() {
+    log "installing GDM bottom logo"
+    install -d -m 0755 "$(dirname "${GDM_LOGO_DEST}")"
+    install -m 0644 "${JX_GDM_LOGO_PNG}" "${GDM_LOGO_DEST}"
+
+    backup_path_once "${GDM_DCONF_FILE}"
+    backup_path_timestamped "${GDM_DCONF_FILE}"
+    install -d -m 0755 "$(dirname "${GDM_DCONF_FILE}")"
+    cat > "${GDM_DCONF_FILE}" <<EOF_GDM_DCONF
+[org/gnome/login-screen]
+logo='${GDM_LOGO_DEST}'
+EOF_GDM_DCONF
+    chmod 0644 "${GDM_DCONF_FILE}"
+    restore_gdm_theme_resource_if_needed
+    refresh_gdm_dconf
+}
+
+refresh_icon_cache() {
+    if ! command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        log "gtk-update-icon-cache not found, skipping icon cache refresh"
+        return 0
+    fi
+
+    log "refreshing hicolor icon cache"
+    gtk-update-icon-cache -f "${HICOLOR_DIR}" || log "hicolor icon cache refresh failed"
+
+    if [[ -d "${YARU_DIR}" ]]; then
+        log "refreshing Yaru icon cache"
+        gtk-update-icon-cache -f "${YARU_DIR}" || log "Yaru icon cache refresh failed"
+    else
+        log "Yaru icon theme not present, skipping cache refresh"
+    fi
+}
+
+restart_gnome_settings() {
+    log "closing GNOME Settings if it is running"
+    killall gnome-control-center >/dev/null 2>&1 || true
+}
+
+print_verification() {
+    cat <<'EOF_VERIFY'
+
+Branding applied.
+
+Verification commands:
+  grep -E '^(NAME|PRETTY_NAME|ID|ID_LIKE|LOGO)=' /etc/os-release /usr/lib/os-release
+  find /usr/share/icons -iname 'ubuntulogo*' -o -iname 'distributor' -o -iname 'jx-logo*'
+  gnome-control-center about
+  plymouth-set-default-theme
+  update-alternatives --query default.plymouth | sed -n '/^Value:/p'
+  grep -R "^logo=" /usr/share/gdm/dconf /etc/gdm3/greeter.dconf-defaults
+
+Expected GNOME Settings -> About result:
+  Top OS name:           JX Workstation
+  Operating System row: JX Workstation 24.04 LTS
+  Distributor logo:     JX logo
+
+If the About page still shows stale branding, log out and back in.
+
+Note: Ubuntu package updates, especially Yaru or base-files updates, may
+restore Ubuntu branding files. Re-run this script after such updates, or run it
+as a post-install branding step in the JX/OS autoinstall process.
+EOF_VERIFY
+}
+
+main() {
+    require_root
+    require_logo
+    ensure_svg_logo
+    ensure_about_logo
+    ensure_plymouth_logo
+    ensure_gdm_logo
+    write_os_release
+    recreate_etc_os_release_symlink
+    install_hicolor_logos
+    override_yaru_logos
+    override_gnome_about_pixmaps
+    install_plymouth_theme
+    install_gdm_logo_setting
+    refresh_icon_cache
+    refresh_initramfs
+    restart_gnome_settings
+    print_verification
+}
+
+main "$@"

@@ -1,0 +1,61 @@
+#!/bin/sh
+
+title=${JX_GUARD_PROMPT_TITLE:-JX Sentinel Guard}
+text=${JX_GUARD_PROMPT_TEXT:-An application wants to access a protected folder.}
+timeout=${JX_GUARD_PROMPT_TIMEOUT:-35}
+if [ -n "${JX_GUARD_PROMPT_LOG:-}" ]; then
+    log=$JX_GUARD_PROMPT_LOG
+elif [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+    log="$XDG_RUNTIME_DIR/jx-guard-zenity-prompt.log"
+else
+    log=/tmp/jx-guard-zenity-prompt.log
+fi
+fallback_log=/tmp/jx-guard-zenity-prompt.log
+
+{
+    printf '%s\n' "--- $(date '+%Y-%m-%dT%H:%M:%S%z') ---"
+    printf 'log=%s fallback_log=%s\n' "$log" "$fallback_log"
+    printf 'pid=%s uid=%s\n' "$$" "$(id -u)"
+    printf 'DISPLAY=%s\n' "${DISPLAY:-}"
+    printf 'WAYLAND_DISPLAY=%s\n' "${WAYLAND_DISPLAY:-}"
+    printf 'XDG_RUNTIME_DIR=%s\n' "${XDG_RUNTIME_DIR:-}"
+    printf 'DBUS_SESSION_BUS_ADDRESS=%s\n' "${DBUS_SESSION_BUS_ADDRESS:-}"
+    printf 'XDG_CURRENT_DESKTOP=%s\n' "${XDG_CURRENT_DESKTOP:-}"
+    printf 'DESKTOP_SESSION=%s\n' "${DESKTOP_SESSION:-}"
+} >>"$log" 2>&1
+if [ "$fallback_log" != "$log" ]; then
+    {
+        printf '%s\n' "--- $(date '+%Y-%m-%dT%H:%M:%S%z') ---"
+        printf 'primary_log=%s\n' "$log"
+        printf 'pid=%s uid=%s\n' "$$" "$(id -u)"
+    } >>"$fallback_log" 2>&1
+fi
+
+selection=$(/usr/bin/zenity \
+    --question \
+    --title="$title" \
+    --width=640 \
+    --timeout="$timeout" \
+    --ok-label="Allow Once" \
+    --cancel-label="Deny" \
+    --extra-button="Always Allow" \
+    --extra-button="Always Deny" \
+    --text="$text" 2>>"$log")
+status=$?
+
+{
+    printf 'zenity_status=%s\n' "$status"
+    printf 'zenity_selection=%s\n' "$selection"
+} >>"$log" 2>&1
+if [ "$fallback_log" != "$log" ]; then
+    {
+        printf 'zenity_status=%s\n' "$status"
+        printf 'zenity_selection=%s\n' "$selection"
+    } >>"$fallback_log" 2>&1
+fi
+
+if [ -n "$selection" ]; then
+    printf '%s\n' "$selection"
+fi
+
+exit "$status"

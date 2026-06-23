@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=JX Permission Agent
+Comment=Shows JX Sentinel Guard permission prompts
+Exec=/opt/jx/bin/jx-permission-agent
+Icon=/opt/jx/share/jx-sentinel-control/logo-all-theme.png
+Terminal=false
+StartupNotify=false
+DBusActivatable=false
+X-GNOME-UsesNotifications=true
+X-GNOME-Autostart-enabled=true

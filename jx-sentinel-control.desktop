@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=JX Sentinel Control
+Comment=Configure JX Sentinel file monitoring
+Exec=/opt/jx/bin/jx-sentinel-control
+Icon=org.jx.sentinel.control
+Terminal=false
+Categories=Settings;Security;
+StartupNotify=true
+StartupWMClass=org.jx.sentinel.control
