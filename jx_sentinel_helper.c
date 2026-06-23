@@ -682,7 +682,8 @@ static int update_guard_protected_path(int add)
 static int set_guard_mode(const char *mode)
 {
     if (strcmp(mode, "prompt") != 0 && strcmp(mode, "log") != 0 &&
-        strcmp(mode, "off") != 0 && strcmp(mode, "strict") != 0) {
+        strcmp(mode, "off") != 0 && strcmp(mode, "strict") != 0 &&
+        strcmp(mode, "audit") != 0 && strcmp(mode, "block") != 0) {
         die("invalid guard mode");
         return 1;
     }
@@ -757,7 +758,7 @@ static int set_guard_mode(const char *mode)
 static void usage(const char *program)
 {
     fprintf(stderr,
-            "Usage: %s --save-config | --apply-config | --start | --stop | --restart | --enable | --disable | --guard-start | --guard-stop | --guard-restart | --guard-enable | --guard-disable | --guard-mode-prompt | --guard-mode-log | --guard-add-app | --guard-remove-app | --guard-remove-policy-app | --guard-add-folder | --guard-remove-folder\n",
+            "Usage: %s --save-config | --apply-config | --start | --stop | --restart | --enable | --disable | --guard-start | --guard-stop | --guard-restart | --guard-enable | --guard-disable | --guard-mode-prompt | --guard-mode-log | --guard-mode-audit | --guard-mode-block | --guard-add-app | --guard-remove-app | --guard-remove-policy-app | --guard-add-folder | --guard-remove-folder\n",
             program);
 }
 
@@ -809,6 +810,12 @@ int main(int argc, char **argv)
     }
     if (strcmp(argv[1], "--guard-mode-log") == 0) {
         return set_guard_mode("log");
+    }
+    if (strcmp(argv[1], "--guard-mode-audit") == 0) {
+        return set_guard_mode("audit");
+    }
+    if (strcmp(argv[1], "--guard-mode-block") == 0) {
+        return set_guard_mode("block");
     }
     if (strcmp(argv[1], "--guard-add-app") == 0) {
         return update_guard_process_allowlist(1);

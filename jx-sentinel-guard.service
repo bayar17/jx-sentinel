@@ -2,13 +2,16 @@
 Description=JX Sentinel Guard Permission Enforcer
 After=local-fs.target
 Wants=local-fs.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Service]
 Type=simple
 ExecStart=/opt/jx/sbin/jx-sentinel-guard --config /opt/jx/etc/jx-sentinel/guard.conf
-Restart=on-failure
+Restart=always
 RestartSec=2
 TimeoutStopSec=45
+UMask=0022
 
 User=root
 Group=root

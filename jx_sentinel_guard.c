@@ -34,6 +34,7 @@
 typedef enum GuardMode {
     MODE_OFF,
     MODE_LOG,
+    MODE_AUDIT,
     MODE_PROMPT,
     MODE_STRICT,
     MODE_BLOCK
@@ -69,6 +70,7 @@ typedef struct AccessEvent {
     char path[PATH_MAX];
     char protected_root[PATH_MAX];
     char action[32];
+    int write_intent;
     ProcInfo proc;
 } AccessEvent;
 
@@ -160,6 +162,10 @@ static int parse_mode_value(const char *value, GuardMode *mode)
     }
     if (strcasecmp(value, "log") == 0) {
         *mode = MODE_LOG;
+        return 0;
+    }
+    if (strcasecmp(value, "audit") == 0) {
+        *mode = MODE_AUDIT;
         return 0;
     }
     if (strcasecmp(value, "prompt") == 0) {
@@ -319,6 +325,14 @@ static void add_builtin_allowlist(GuardConfig *cfg)
     add_allowlist_path(cfg, "/opt/jx/bin/jx-permission-agent");
     add_allowlist_path(cfg, "/opt/jx/bin/jx-sentinel-applet");
     add_allowlist_path(cfg, "/opt/jx/sbin/jx-sentinel-guard");
+    add_process_allowlist(cfg, "systemd");
+    add_process_allowlist(cfg, "systemd-logind");
+    add_process_allowlist(cfg, "dbus-daemon");
+    add_process_allowlist(cfg, "gdm");
+    add_process_allowlist(cfg, "gdm-session-worker");
+    add_process_allowlist(cfg, "gnome-shell");
+    add_process_allowlist(cfg, "gnome-session-binary");
+    add_process_allowlist(cfg, "gnome-keyring-daemon");
     add_process_allowlist(cfg, "nautilus");
 }
 
@@ -347,8 +361,6 @@ static void add_comma_executables(GuardConfig *cfg, const char *value)
         char *path = trim_space(item);
         normalize_path_value(path);
         add_allowlist_path(cfg, path);
-        const char *base = strrchr(path, '/');
-        add_process_allowlist(cfg, base ? base + 1 : path);
     }
 }
 
@@ -701,8 +713,17 @@ static int process_matches_allow_pattern(const ProcInfo *proc, const char *patte
         return strcmp(proc->exe, pattern) == 0;
     }
 
-    if (strcmp(basename_for_path(proc->exe), pattern) == 0) {
-        return 1;
+    if (proc->exe[0] && strcmp(proc->exe, "unknown") != 0) {
+        if (!path_has_prefix(proc->exe, "/usr/bin") &&
+            !path_has_prefix(proc->exe, "/usr/sbin") &&
+            !path_has_prefix(proc->exe, "/usr/lib") &&
+            !path_has_prefix(proc->exe, "/usr/libexec") &&
+            !path_has_prefix(proc->exe, "/opt/jx/bin") &&
+            !path_has_prefix(proc->exe, "/opt/jx/sbin") &&
+            !path_has_prefix(proc->exe, "/opt/jx/libexec")) {
+            return 0;
+        }
+        return strcmp(basename_for_path(proc->exe), pattern) == 0;
     }
 
     char token[PATH_MAX];
@@ -730,7 +751,8 @@ static int is_guard_management_target(const char *path)
         "/opt/jx/bin/jx-sentinel-applet",
         "/opt/jx/sbin/jx-sentinel-guard",
         "/opt/jx/etc/jx-sentinel/guard.conf",
-        "/opt/jx/var/lib/jx-sentinel/permissions.db"
+        "/opt/jx/var/lib/jx-sentinel/permissions.db",
+        "/etc/systemd/system/jx-sentinel-guard.service"
     };
     for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) {
         if (strcmp(path, targets[i]) == 0) {
@@ -738,6 +760,20 @@ static int is_guard_management_target(const char *path)
         }
     }
     return 0;
+}
+
+static int proc_exe_is(const ProcInfo *proc, const char *path)
+{
+    return proc->exe[0] && strcmp(proc->exe, path) == 0;
+}
+
+static int is_guard_management_process(const ProcInfo *proc)
+{
+    if (!proc->uid_known || proc->uid != 0) {
+        return 0;
+    }
+    return proc_exe_is(proc, "/opt/jx/libexec/jx-sentinel-helper") ||
+           proc_exe_is(proc, "/usr/bin/install");
 }
 
 static const char *action_from_mask(uint64_t mask)
@@ -749,6 +785,29 @@ static const char *action_from_mask(uint64_t mask)
     if (mask & FAN_OPEN) return "open";
     if (mask & FAN_ACCESS) return "access";
     return "unknown";
+}
+
+static int action_is_read_only(const AccessEvent *ev)
+{
+    return !ev->write_intent &&
+           (strcmp(ev->action, "open") == 0 || strcmp(ev->action, "access") == 0);
+}
+
+static int action_is_write_like(const AccessEvent *ev)
+{
+    return ev->write_intent || strcmp(ev->action, "open_write") == 0 ||
+           strcmp(ev->action, "write") == 0 ||
+           strcmp(ev->action, "execute") == 0;
+}
+
+static int fd_has_write_intent(int fd)
+{
+    int flags = fcntl(fd, F_GETFL);
+    if (flags < 0) {
+        return 0;
+    }
+    int access_mode = flags & O_ACCMODE;
+    return access_mode == O_WRONLY || access_mode == O_RDWR;
 }
 
 static int create_candidate_matches(const AccessEvent *ev)
@@ -1123,13 +1182,28 @@ static int decide_event(const GuardConfig *cfg, AccessEvent *ev, const char **so
         return 1;
     }
     if (is_guard_management_target(ev->path)) {
+        if (action_is_read_only(ev)) {
+            snprintf(decision, decision_len, "allow_once");
+            *source = "guard_read";
+            return 1;
+        }
+        if (is_guard_management_process(&ev->proc)) {
+            snprintf(decision, decision_len, "allow_once");
+            *source = "guard_admin";
+            return 1;
+        }
+        snprintf(decision, decision_len, "deny_once");
+        *source = "guard_self_protect";
+        return 0;
+    }
+    if (action_is_read_only(ev)) {
         snprintf(decision, decision_len, "allow_once");
-        *source = "system_allow";
+        *source = "read_observe";
         return 1;
     }
-    if (mode == MODE_OFF || mode == MODE_LOG) {
+    if (mode == MODE_OFF || mode == MODE_LOG || mode == MODE_AUDIT) {
         snprintf(decision, decision_len, "allow_once");
-        *source = mode == MODE_OFF ? "system_allow" : "default";
+        *source = mode == MODE_OFF ? "system_allow" : (mode == MODE_AUDIT ? "audit" : "default");
         return 1;
     }
     if (is_system_allowed(cfg, &ev->proc)) {
@@ -1240,7 +1314,13 @@ static int should_prompt_observed_event(const GuardConfig *cfg, const AccessEven
     if (mode != MODE_PROMPT || g_agent_fd < 0) {
         return 0;
     }
-    if (is_system_allowed(cfg, &ev->proc) || is_guard_management_target(ev->path)) {
+    if (!action_is_write_like(ev)) {
+        return 0;
+    }
+    if (is_guard_management_target(ev->path)) {
+        return 0;
+    }
+    if (is_system_allowed(cfg, &ev->proc)) {
         return 0;
     }
     int allow = 0;
@@ -1300,6 +1380,10 @@ static void process_fan_event(int fan_fd, const GuardConfig *cfg, const struct f
         respond_permission(fan_fd, md->fd, FAN_ALLOW);
         if (md->fd >= 0) close(md->fd);
         return;
+    }
+    ev.write_intent = fd_has_write_intent(md->fd);
+    if (ev.write_intent && strcmp(ev.action, "open") == 0) {
+        snprintf(ev.action, sizeof(ev.action), "open_write");
     }
     if (md->mask & FAN_OPEN_PERM) {
         remember_create_candidate_if_empty_file(&ev);
